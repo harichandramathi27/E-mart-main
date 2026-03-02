@@ -151,12 +151,46 @@ const cartItems = document.getElementById('cart-items');
 const cartTotal = document.getElementById('cart-total');
 const cartCount = document.querySelector('.cart-count');
 const filterButtons = document.querySelectorAll('.filter-btn');
+let inventoryCurrentPage = 1;
+let inventoryCategoryFilter = 'all';
+const inventoryItemsPerPage = 8;
+
+function getAddedProducts() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem('addedProducts') || '[]');
+        if (!Array.isArray(parsed)) {
+            return [];
+        }
+
+        return parsed.map((item, index) => ({
+            id: Number(item.id) || Date.now() + index,
+            name: item.name || `Product ${index + 1}`,
+            price: Number(item.price) || 0,
+            category: item.category || 'other',
+            image: item.image || 'https://via.placeholder.com/80?text=Product',
+            stock: Number(item.stock ?? item.productStock ?? 0),
+            minStock: Number(item.minStock ?? 5),
+            source: 'local'
+        }));
+    } catch (error) {
+        return [];
+    }
+}
+
+function getAllStoreProducts() {
+    return [...products, ...getAddedProducts()];
+}
 
 // Display products
 function displayProducts(category = 'all') {
+    if (!productsContainer) {
+        return;
+    }
+
+    const storefrontProducts = getAllStoreProducts();
     const filteredProducts = category === 'all' ?
-        products :
-        products.filter(product => product.category === category);
+        storefrontProducts :
+        storefrontProducts.filter(product => product.category === category);
 
     productsContainer.innerHTML = filteredProducts.map(product => `
         <div class="product-card">
@@ -176,7 +210,11 @@ function displayProducts(category = 'all') {
 
 // Add to cart
 function addToCart(productId) {
-    const product = products.find(p => p.id === productId);
+    const product = getAllStoreProducts().find(p => p.id === productId);
+    if (!product) {
+        return;
+    }
+
     const cartItem = cart.find(item => item.id === productId);
 
     if (cartItem) {
@@ -194,6 +232,10 @@ function addToCart(productId) {
 
 // Update cart
 function updateCart() {
+    if (!cartItems || !cartTotal || !cartCount) {
+        return;
+    }
+
     // Update cart items display
     cartItems.innerHTML = cart.map(item => `
         <div class="cart-item">
@@ -202,9 +244,9 @@ function updateCart() {
                 <h4 class="cart-item-title">${item.name}</h4>
                 <p class="cart-item-price">$${item.price.toFixed(2)}</p>
                 <div class="cart-item-quantity">
-                    <button class="quantity-btn" onclick="updateQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                    <button class="quantity-btn" onclick="updateCartQuantity(${item.id}, ${item.quantity - 1})">-</button>
                     <span>${item.quantity}</span>
-                    <button class="quantity-btn" onclick="updateQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                    <button class="quantity-btn" onclick="updateCartQuantity(${item.id}, ${item.quantity + 1})">+</button>
                 </div>
             </div>
         </div>
@@ -220,7 +262,7 @@ function updateCart() {
 }
 
 // Update quantity
-function updateQuantity(productId, newQuantity) {
+function updateCartQuantity(productId, newQuantity) {
     if (newQuantity < 1) {
         cart = cart.filter(item => item.id !== productId);
     } else {
@@ -254,47 +296,6 @@ function showNotification(message) {
         notification.remove();
     }, 3000);
 }
-
-// Cart modal
-document.querySelector('.cart-icon').addEventListener('click', () => {
-    cartModal.style.display = 'block';
-});
-
-document.querySelector('.close-cart').addEventListener('click', () => {
-    cartModal.style.display = 'none';
-});
-
-// Close cart modal when clicking outside
-cartModal.addEventListener('click', (e) => {
-    if (e.target === cartModal) {
-        cartModal.style.display = 'none';
-    }
-});
-
-// Filter products
-filterButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        // Remove active class from all buttons
-        filterButtons.forEach(btn => btn.classList.remove('active'));
-        // Add active class to clicked button
-        button.classList.add('active');
-        // Filter products
-        displayProducts(button.dataset.category);
-    });
-});
-
-// Checkout
-document.querySelector('.checkout-btn').addEventListener('click', () => {
-    if (cart.length === 0) {
-        showNotification('Your cart is empty!');
-        return;
-    }
-
-    showNotification('Thank you for your purchase!');
-    cart = [];
-    updateCart();
-    cartModal.style.display = 'none';
-});
 
 // Contact Form Handler
 function handleSubmit(event) {
@@ -330,7 +331,7 @@ function loadProductDetails() {
         return;
     }
 
-    const product = products.find(p => p.id === productId);
+    const product = getAllStoreProducts().find(p => p.id === productId);
     if (!product) {
         window.location.href = 'index.html';
         return;
@@ -419,6 +420,190 @@ function handleCheckout(event) {
     return false;
 }
 
+function getInventoryProducts() {
+    return getAllStoreProducts().map((product, index) => ({
+        id: product.id,
+        name: product.name,
+        category: product.category,
+        price: Number(product.price) || 0,
+        image: product.image || 'https://via.placeholder.com/80?text=Product',
+        stock: Number(product.stock ?? (20 - (index % 6) * 3)),
+        minStock: Number(product.minStock ?? 5),
+        source: product.source || 'seed'
+    }));
+}
+
+function getStockStatus(stock, minStock) {
+    if (stock <= 0) {
+        return 'out-of-stock';
+    }
+    if (stock <= minStock) {
+        return 'low-stock';
+    }
+    return 'in-stock';
+}
+
+function statusLabel(status) {
+    if (status === 'in-stock') return 'In Stock';
+    if (status === 'low-stock') return 'Low Stock';
+    return 'Out of Stock';
+}
+
+function renderInventoryTable() {
+    const tableBody = document.getElementById('inventoryTableBody');
+    if (!tableBody) {
+        return;
+    }
+
+    const searchInput = document.getElementById('searchInventory');
+    const stockFilterElement = document.getElementById('stockFilter');
+    const searchText = (searchInput?.value || '').trim().toLowerCase();
+    const stockFilter = stockFilterElement?.value || 'all';
+
+    let rows = getInventoryProducts();
+
+    if (inventoryCategoryFilter !== 'all') {
+        rows = rows.filter(item => item.category === inventoryCategoryFilter);
+    }
+
+    if (searchText) {
+        rows = rows.filter(item => item.name.toLowerCase().includes(searchText) || String(item.id).includes(searchText));
+    }
+
+    if (stockFilter !== 'all') {
+        rows = rows.filter(item => getStockStatus(item.stock, item.minStock) === stockFilter);
+    }
+
+    const totalPages = Math.max(1, Math.ceil(rows.length / inventoryItemsPerPage));
+    inventoryCurrentPage = Math.min(inventoryCurrentPage, totalPages);
+    const start = (inventoryCurrentPage - 1) * inventoryItemsPerPage;
+    const pagedRows = rows.slice(start, start + inventoryItemsPerPage);
+
+    tableBody.innerHTML = pagedRows.map(item => {
+        const status = getStockStatus(item.stock, item.minStock);
+        return `
+            <tr>
+                <td>#${item.id}</td>
+                <td><img src="${item.image}" alt="${item.name}"></td>
+                <td>${item.name}</td>
+                <td>${item.category}</td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>${item.stock}</td>
+                <td><span class="status-badge status-${status}">${statusLabel(status)}</span></td>
+                <td class="inventory-actions-cell">
+                    <button type="button" onclick="editInventoryProduct(${item.id})"><i class="fas fa-pen"></i></button>
+                    <button type="button" onclick="deleteInventoryProduct(${item.id})"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('') || `
+        <tr>
+            <td colspan="8" style="text-align: center; padding: 1.5rem;">No products found</td>
+        </tr>
+    `;
+
+    const currentPageElement = document.getElementById('currentPage');
+    if (currentPageElement) {
+        currentPageElement.textContent = `Page ${inventoryCurrentPage} of ${totalPages}`;
+    }
+
+    const paginationButtons = document.querySelectorAll('.pagination .page-btn');
+    if (paginationButtons.length >= 2) {
+        paginationButtons[0].disabled = inventoryCurrentPage <= 1;
+        paginationButtons[1].disabled = inventoryCurrentPage >= totalPages;
+    }
+
+    const allInventory = getInventoryProducts();
+    const lowCount = allInventory.filter(item => {
+        const status = getStockStatus(item.stock, item.minStock);
+        return status === 'low-stock';
+    }).length;
+    const outCount = allInventory.filter(item => getStockStatus(item.stock, item.minStock) === 'out-of-stock').length;
+
+    const alertCounts = document.querySelectorAll('.stock-alerts .count');
+    if (alertCounts.length >= 2) {
+        alertCounts[0].textContent = lowCount;
+        alertCounts[1].textContent = outCount;
+    }
+}
+
+function filterProducts(category) {
+    inventoryCategoryFilter = category;
+    inventoryCurrentPage = 1;
+
+    const categoryLinks = document.querySelectorAll('.category-list a');
+    categoryLinks.forEach(link => {
+        const isActive = link.textContent.toLowerCase().includes(category.replace('-', ' ')) || (category === 'all' && link.textContent.toLowerCase().includes('all products'));
+        link.classList.toggle('active', isActive);
+    });
+
+    renderInventoryTable();
+    return false;
+}
+
+function changePage(step) {
+    inventoryCurrentPage = Math.max(1, inventoryCurrentPage + step);
+    renderInventoryTable();
+}
+
+function exportInventory() {
+    const rows = getInventoryProducts();
+    const header = ['id', 'name', 'category', 'price', 'stock', 'minStock'];
+    const csvRows = [header.join(',')];
+
+    rows.forEach(item => {
+        csvRows.push([
+            item.id,
+            `"${String(item.name).replace(/"/g, '""')}"`,
+            item.category,
+            item.price.toFixed(2),
+            item.stock,
+            item.minStock
+        ].join(','));
+    });
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'inventory-export.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+function openImportModal() {
+    showNotification('Import is not configured yet. Please use Add New Product.');
+}
+
+function editInventoryProduct(productId) {
+    showNotification(`Edit for product #${productId} will be added soon.`);
+}
+
+function deleteInventoryProduct(productId) {
+    const stored = getAddedProducts();
+    const next = stored.filter(item => item.id !== productId);
+
+    if (next.length === stored.length) {
+        showNotification('Default products cannot be deleted from this demo list.');
+        return;
+    }
+
+    localStorage.setItem('addedProducts', JSON.stringify(next.map(item => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        description: item.description || '',
+        price: item.price,
+        stock: item.stock,
+        minStock: item.minStock,
+        image: item.image
+    }))));
+    showNotification('Product deleted successfully.');
+    renderInventoryTable();
+}
+
 function updateOrderSummary() {
     const summaryItems = document.getElementById('summary-items');
     const subtotalElement = document.getElementById('subtotal');
@@ -465,6 +650,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayProducts(button.dataset.category);
             });
         });
+    }
+
+    if (document.getElementById('inventoryTableBody')) {
+        const searchInput = document.getElementById('searchInventory');
+        const stockFilterElement = document.getElementById('stockFilter');
+        const categoryLinks = document.querySelectorAll('.category-list a');
+
+        searchInput?.addEventListener('input', () => {
+            inventoryCurrentPage = 1;
+            renderInventoryTable();
+        });
+
+        stockFilterElement?.addEventListener('change', () => {
+            inventoryCurrentPage = 1;
+            renderInventoryTable();
+        });
+
+        categoryLinks.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+            });
+        });
+
+        renderInventoryTable();
     }
 
     // Initialize product details page
