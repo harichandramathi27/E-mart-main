@@ -53,14 +53,14 @@ const products = [{
         name: "Fresh Tomatoes",
         price: 2.49,
         category: "vegetables",
-        image: "https://images.unsplash.com/photo-1546104474-dfb34282e760?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80"
+        image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80"
     },
     {
         id: 9,
         name: "Green Bell Peppers",
         price: 1.99,
         category: "vegetables",
-        image: "https://images.unsplash.com/photo-1509377244-dd5d1e09065b?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80"
+        image: "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=600&q=80"
     },
     {
         id: 10,

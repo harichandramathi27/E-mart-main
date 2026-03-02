@@ -453,7 +453,7 @@ footer {
     color: var(--text-color);
 }
 
-.form-group input,
+.form-group input:not([type="checkbox"]):not([type="radio"]),
 .form-group textarea {
     width: 100%;
     padding: 0.8rem;
@@ -750,6 +750,24 @@ footer {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
     margin-bottom: 1.5rem;
+}
+
+.checkout-form .checkbox-group {
+    margin-top: 0.5rem;
+}
+
+.checkout-form .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+.checkout-form .checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    flex-shrink: 0;
 }
 
 .order-summary {
