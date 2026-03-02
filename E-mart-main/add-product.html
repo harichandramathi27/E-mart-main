@@ -6,19 +6,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add New Product - E MART</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/alert.css">
-    <link rel="stylesheet" href="admin/admin-styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Enhanced Animations and Styles */
+
+        body {
+            background: #f6f8fb;
+        }
         
         .add-product-container {
             max-width: 1200px;
-            margin: 80px auto 40px;
+            margin: 90px auto 40px;
             padding: 2rem;
             animation: fadeIn 0.8s ease-out;
             position: relative;
             overflow: hidden;
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .add-product-container h2 {
+            text-align: center;
+            color: var(--text-color);
+            margin-bottom: 1.5rem;
         }
         
         .add-product-container::before {
@@ -126,6 +137,9 @@
             overflow: hidden;
             transition: all 0.4s ease;
             background: #f8f9fa;
+            cursor: pointer;
+            flex-direction: column;
+            gap: 0.75rem;
         }
         
         .image-preview:hover {
@@ -146,6 +160,12 @@
             object-fit: contain;
             display: none;
             animation: zoomIn 0.4s ease-out;
+        }
+
+        .upload-text {
+            color: #777;
+            font-size: 0.95rem;
+            text-align: center;
         }
         
         @keyframes zoomIn {
@@ -259,6 +279,7 @@
             gap: 1rem;
             margin-top: 2rem;
             grid-column: 1 / -1;
+            justify-content: center;
         }
         
         .btn {
@@ -493,6 +514,7 @@
                     <label>Product Image*</label>
                     <div class="image-preview" id="imagePreview">
                         <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <span class="upload-text">Click or drop image here</span>
                         <img id="previewImg" src="#" alt="Preview">
                     </div>
                     <input type="file" id="productImage" accept="image/*" required style="display: none;">
@@ -528,10 +550,120 @@
         <i class="fas fa-check-circle"></i> Product added successfully!
     </div>
 
-    <script src="js/form-ui.js"></script>
-    <script src="script.js"></script>
-    <script src="js/alert-messages.js"></script>
-    <script src="js/product-management.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('addProductForm');
+            const categorySelect = document.getElementById('productCategory');
+            const categoryTags = document.querySelectorAll('.category-tag');
+            const imagePreview = document.getElementById('imagePreview');
+            const imageInput = document.getElementById('productImage');
+            const previewImg = document.getElementById('previewImg');
+            const uploadIcon = imagePreview.querySelector('.upload-icon');
+            const uploadText = imagePreview.querySelector('.upload-text');
+            const successMessage = document.getElementById('successMessage');
+
+            const updateCategoryTagState = (selectedCategory) => {
+                categoryTags.forEach(tag => {
+                    tag.classList.toggle('active', tag.dataset.category === selectedCategory);
+                });
+            };
+
+            const readImage = (file) => {
+                if (!file || !file.type.startsWith('image/')) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    previewImg.src = event.target.result;
+                    previewImg.style.display = 'block';
+                    uploadIcon.style.display = 'none';
+                    uploadText.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            };
+
+            categoryTags.forEach(tag => {
+                tag.addEventListener('click', () => {
+                    const category = tag.dataset.category;
+                    categorySelect.value = category;
+                    updateCategoryTagState(category);
+                });
+            });
+
+            categorySelect.addEventListener('change', () => {
+                updateCategoryTagState(categorySelect.value);
+            });
+
+            imagePreview.addEventListener('click', () => {
+                imageInput.click();
+            });
+
+            imageInput.addEventListener('change', () => {
+                readImage(imageInput.files[0]);
+            });
+
+            imagePreview.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                imagePreview.classList.add('drag-over');
+            });
+
+            imagePreview.addEventListener('dragleave', () => {
+                imagePreview.classList.remove('drag-over');
+            });
+
+            imagePreview.addEventListener('drop', (event) => {
+                event.preventDefault();
+                imagePreview.classList.remove('drag-over');
+
+                const file = event.dataTransfer.files[0];
+                if (!file) {
+                    return;
+                }
+
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                imageInput.files = dataTransfer.files;
+                readImage(file);
+            });
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                const newProduct = {
+                    id: Date.now(),
+                    name: document.getElementById('productName').value.trim(),
+                    category: categorySelect.value,
+                    description: document.getElementById('productDescription').value.trim(),
+                    price: Number(document.getElementById('productPrice').value),
+                    stock: Number(document.getElementById('productStock').value),
+                    minStock: Number(document.getElementById('minStock').value || 0),
+                    image: previewImg.src && previewImg.style.display === 'block' ? previewImg.src : ''
+                };
+
+                const existingProducts = JSON.parse(localStorage.getItem('addedProducts') || '[]');
+                existingProducts.push(newProduct);
+                localStorage.setItem('addedProducts', JSON.stringify(existingProducts));
+
+                successMessage.style.display = 'block';
+                setTimeout(() => {
+                    successMessage.style.display = 'none';
+                }, 2500);
+
+                form.reset();
+                updateCategoryTagState('');
+                previewImg.src = '#';
+                previewImg.style.display = 'none';
+                uploadIcon.style.display = 'block';
+                uploadText.style.display = 'block';
+            });
+        });
+    </script>
 </body>
 
 </html>
